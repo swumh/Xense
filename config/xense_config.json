@@ -1,0 +1,24 @@
+{
+    "sensors": [
+        {
+            "name": "xense_1",
+            "sensor_id": null,
+            "publishers": [
+                {
+                    "type": "force",
+                    "publish_rate": 30.0,
+                    "topic_name": null,
+                    "frame_id": null,
+                    "use_stamped": true,
+                    "namespace": ""
+                }
+            ]
+        }
+    ],
+    "global": {
+        "default_publish_rate": 30.0,
+        "default_frame_id": "xense_sensor",
+        "default_use_stamped": true
+    }
+}
+

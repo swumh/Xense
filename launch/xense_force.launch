@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- Xense六维力发布节点 -->
+    
+    <!-- 参数说明 -->
+    <arg name="config" default="" doc="配置文件路径（JSON格式）"/>
+    <arg name="use_rosparam" default="false" doc="是否从ROS参数服务器加载配置"/>
+    <arg name="sensor_id" default="" doc="传感器序列号或ID（简单模式）"/>
+    <arg name="rate" default="30.0" doc="发布频率（Hz）"/>
+    <arg name="frame_id" default="" doc="坐标系ID"/>
+    <arg name="topic_name" default="" doc="ROS话题名称"/>
+    <arg name="no_stamped" default="false" doc="是否不使用时间戳"/>
+    
+    <!-- 发布节点 -->
+    <node name="xense_force_publisher" 
+          pkg="" 
+          type="main.py"
+          output="screen">
+        <!-- 配置文件模式 -->
+        <param if="$(eval config != '')" name="config" value="$(arg config)"/>
+        <param if="$(eval use_rosparam == true)" name="use_rosparam" value="true"/>
+        
+        <!-- 简单模式参数 -->
+        <param if="$(eval sensor_id != '')" name="sensor_id" value="$(arg sensor_id)"/>
+        <param name="rate" value="$(arg rate)"/>
+        <param if="$(eval frame_id != '')" name="frame_id" value="$(arg frame_id)"/>
+        <param if="$(eval topic_name != '')" name="topic_name" value="$(arg topic_name)"/>
+        <param name="no_stamped" value="$(arg no_stamped)"/>
+    </node>
+</launch>
+
