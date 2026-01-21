@@ -17,7 +17,7 @@ if str(src_path) not in sys.path:
 
 from xense_sensor import XenseSensor
 from base_publisher import BaseDataPublisher
-from force_publisher import XenseForcePublisher
+from timestamp_publisher import XenseTimestampPublisher
 
 
 class XenseManager:
@@ -68,22 +68,24 @@ class XenseManager:
             rospy.logerr(f"[XenseManager] 添加传感器失败: {e}")
             raise
     
-    def add_force_publisher(self, sensor_name: str, publish_rate: float = 30.0,
-                           topic_name: str = None, frame_id: str = None,
-                           use_stamped: bool = True, namespace: str = "") -> XenseForcePublisher:
+    def add_timestamp_publisher(self, sensor_name: str, publish_rate: float = 30.0,
+                                topic_name: str = None, frame_id: str = None,
+                                namespace: str = "", save_rectify: bool = True,
+                                save_dir: str = None) -> XenseTimestampPublisher:
         """
-        为指定传感器添加六维力发布器
+        为指定传感器添加时间戳发布器
         
         参数:
             sensor_name: 传感器名称
             publish_rate: 发布频率（Hz），默认30Hz
             topic_name: ROS话题名称，如果为None则使用默认名称
             frame_id: 坐标系ID，如果为None则使用sensor.name
-            use_stamped: 是否使用WrenchStamped消息，默认True
             namespace: ROS命名空间前缀
+            save_rectify: 是否保存Rectify图像，默认True
+            save_dir: 保存图像的目录
         
         返回:
-            XenseForcePublisher: 发布器实例
+            XenseTimestampPublisher: 发布器实例
         """
         if sensor_name not in self.sensors:
             raise ValueError(f"传感器 '{sensor_name}' 不存在，请先添加传感器")
@@ -91,7 +93,7 @@ class XenseManager:
         sensor = self.sensors[sensor_name]
         
         # 生成发布器名称
-        publisher_name = f"{sensor_name}_force_publisher"
+        publisher_name = f"{sensor_name}_timestamp_publisher"
         
         # 检查是否已存在
         if publisher_name in self.publishers:
@@ -99,19 +101,20 @@ class XenseManager:
         
         # 创建发布器
         try:
-            publisher = XenseForcePublisher(
+            publisher = XenseTimestampPublisher(
                 sensor=sensor,
                 publish_rate=publish_rate,
                 topic_name=topic_name,
                 frame_id=frame_id,
-                use_stamped=use_stamped,
-                namespace=namespace
+                namespace=namespace,
+                save_rectify=save_rectify,
+                save_dir=save_dir
             )
             self.publishers[publisher_name] = publisher
-            rospy.loginfo(f"[XenseManager] 已添加发布器: {publisher_name}")
+            rospy.loginfo(f"[XenseManager] 已添加时间戳发布器: {publisher_name}")
             return publisher
         except Exception as e:
-            rospy.logerr(f"[XenseManager] 添加发布器失败: {e}")
+            rospy.logerr(f"[XenseManager] 添加时间戳发布器失败: {e}")
             raise
     
     def add_custom_publisher(self, sensor_name: str, publisher: BaseDataPublisher,
@@ -180,7 +183,16 @@ class XenseManager:
     
     def shutdown(self):
         """关闭所有传感器和发布器"""
-        rospy.loginfo("[XenseManager] 正在关闭所有传感器...")
+        rospy.loginfo("[XenseManager] 正在关闭所有传感器和发布器...")
+        
+        # 先关闭所有发布器（导出数据）
+        for name, publisher in self.publishers.items():
+            try:
+                if hasattr(publisher, 'shutdown'):
+                    publisher.shutdown()
+                rospy.loginfo(f"[XenseManager] 已关闭发布器: {name}")
+            except Exception as e:
+                rospy.logwarn(f"[XenseManager] 关闭发布器 {name} 时出错: {e}")
         
         # 释放所有传感器资源
         for name, sensor in self.sensors.items():
@@ -192,7 +204,7 @@ class XenseManager:
         
         self.sensors.clear()
         self.publishers.clear()
-        rospy.loginfo("[XenseManager] 所有传感器已关闭")
+        rospy.loginfo("[XenseManager] 所有传感器和发布器已关闭")
     
     def get_statistics(self) -> Dict:
         """

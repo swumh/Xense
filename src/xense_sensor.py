@@ -7,7 +7,8 @@ Xense传感器基础封装类
 
 import rospy
 import sys
-from typing import Optional
+from typing import Optional, Tuple, Union
+from pathlib import Path
 from xensesdk import Sensor
 
 
@@ -60,6 +61,64 @@ class XenseSensor:
             self.is_connected = False
             raise
     
+    def get_timestamp(self) -> Optional[float]:
+        """
+        获取传感器时间戳
+        
+        返回:
+            float: 传感器时间戳（秒），如果失败返回None
+        """
+        if not self.is_connected or self.sensor is None:
+            rospy.logwarn(f"[{self.name}] 传感器未连接，无法获取数据")
+            return None
+        
+        try:
+            timestamp = self.sensor.selectSensorInfo(Sensor.OutputType.TimeStamp)
+            return timestamp
+        except Exception as e:
+            rospy.logerr(f"[{self.name}] 获取时间戳失败: {e}")
+            return None
+    
+    def get_timestamp_and_rectify(self) -> Optional[Tuple]:
+        """
+        同时获取时间戳和Rectify图像（保证同一帧数据）
+        
+        返回:
+            tuple: (timestamp, rectify_image)，如果失败返回None
+        """
+        if not self.is_connected or self.sensor is None:
+            rospy.logwarn(f"[{self.name}] 传感器未连接，无法获取数据")
+            return None
+        
+        try:
+            # 使用同一次调用获取多种数据，确保来自同一帧
+            rectify, timestamp = self.sensor.selectSensorInfo(
+                Sensor.OutputType.Rectify,
+                Sensor.OutputType.TimeStamp
+            )
+            return (timestamp, rectify)
+        except Exception as e:
+            rospy.logerr(f"[{self.name}] 获取时间戳和Rectify失败: {e}")
+            return None
+    
+    def get_rectify(self):
+        """
+        获取校正图像
+        
+        返回:
+            numpy.ndarray: 校正图像，shape=(700, 400, 3)，BGR格式，如果失败返回None
+        """
+        if not self.is_connected or self.sensor is None:
+            rospy.logwarn(f"[{self.name}] 传感器未连接，无法获取数据")
+            return None
+        
+        try:
+            rectify = self.sensor.selectSensorInfo(Sensor.OutputType.Rectify)
+            return rectify
+        except Exception as e:
+            rospy.logerr(f"[{self.name}] 获取Rectify图像失败: {e}")
+            return None
+    
     def get_force_resultant(self):
         """
         获取六维合力数据
@@ -97,6 +156,29 @@ class XenseSensor:
         except Exception as e:
             rospy.logerr(f"[{self.name}] 获取传感器数据失败: {e}")
             return None
+    
+    def export_runtime_config(self, save_dir: Union[str, Path] = None):
+        """
+        导出运行时配置（用于离线处理）
+        
+        参数:
+            save_dir: 保存目录，如果为None则使用当前目录
+        """
+        if not self.is_connected or self.sensor is None:
+            rospy.logwarn(f"[{self.name}] 传感器未连接，无法导出配置")
+            return
+        
+        try:
+            if save_dir is None:
+                save_dir = Path.cwd()
+            else:
+                save_dir = Path(save_dir)
+            save_dir.mkdir(parents=True, exist_ok=True)
+            
+            self.sensor.exportRuntimeConfig(save_dir)
+            rospy.loginfo(f"[{self.name}] 已导出运行时配置到 {save_dir}")
+        except Exception as e:
+            rospy.logerr(f"[{self.name}] 导出运行时配置失败: {e}")
     
     def calibrate(self):
         """

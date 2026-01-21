@@ -34,3 +34,6 @@ build/
 install/
 .catkin_workspace
 
+# Logs and databases and test
+test/
+data/
