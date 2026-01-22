@@ -6,8 +6,10 @@
 
 - ✅ **自动扫描**：自动检测USB连接的Xense传感器（最多4个）
 - ✅ **时间戳发布**：通过ROS发布传感器时间戳（`std_msgs/Header`）
-- ✅ **Rectify图像保存**：自动保存校正图像，用于离线处理
-- ✅ **异步写盘**：使用队列+写盘线程，避免IO阻塞主循环
+- ✅ **Rectify图像保存**：保存原始字节数据（.raw），高性能写盘
+- ✅ **Rectify话题发布**：可选发布Rectify图像到ROS话题（`--publish-rectify`）
+- ✅ **异步写盘**：阻塞队列+写盘线程，避免IO阻塞和轮询开销
+- ✅ **可配置队列缓冲**：队列大小 = 发布频率 × 缓冲时间（默认60秒）
 - ✅ **离线处理支持**：自动导出时间戳和运行时配置
 
 ## 架构设计
@@ -257,18 +259,20 @@ python3 src/main.py
 | 参数 | 说明 |
 |------|------|
 | `--scan-only` | 仅扫描传感器，不启动发布 |
-| `--rate` | 发布频率(Hz)，默认30 |
+| `--rate` | 发布频率(Hz)，默认60 |
 | `--no-save-rectify` | 不保存Rectify图像 |
+| `--publish-rectify` | 发布Rectify话题（包含图像和时间戳），自动禁用图像保存 |
 | `--save-dir` | 保存目录，默认为 `data/` |
 
 ## 输出
 
 ### ROS话题
 
-每个传感器发布一个话题：
-- `/xense_1/timestamp` (std_msgs/Header)
-- `/xense_2/timestamp` (std_msgs/Header)
-- ...最多4个
+每个传感器发布话题：
+- `/xense_1/timestamp` (std_msgs/Header) - 时间戳
+- `/xense_1/rectify` (sensor_msgs/Image) - Rectify图像（仅 `--publish-rectify` 模式）
+- `/xense_2/timestamp` ...
+- ...最多4个传感器
 
 ### 保存的文件
 
@@ -278,33 +282,49 @@ python3 src/main.py
 data/
 └── 20260121_143025/              # 本次采集的session目录（启动时间戳）
     ├── OG000276/                 # 设备ID命名的文件夹
-    │   ├── 000000_1768981234.567890.png  # Rectify图像 (帧号_时间戳)
-    │   ├── 000001_1768981234.600123.png
+    │   ├── 000000_1768981234.567890.raw  # Rectify原始数据 (帧号_时间戳)
+    │   ├── 000001_1768981234.600123.raw
     │   ├── ...
     │   ├── timestamps.npy        # 时间戳数组
     │   └── runtime_OG000276      # 运行时配置
     ├── OG000277/                 # 另一个设备
-    │   ├── 000000_1768981234.570000.png
+    │   ├── 000000_1768981234.570000.raw
     │   └── ...
     └── ...
 ```
 
 > 目录结构：`data/{session_YYYYMMDD_HHMMSS}/{sensor_id}/`
-> 文件名格式：`{frame_count:06d}_{timestamp}.png`
+> 文件名格式：`{frame_count:06d}_{timestamp}.raw`
+> 
+> **.raw文件格式**：numpy原始字节，固定结构 shape=(700, 400, 3), dtype=uint8, BGR格式
 
 ## 离线处理
 
+### 还原.raw图像
+
+```python
+import numpy as np
+
+# Rectify图像固定格式：shape=(700, 400, 3), dtype=uint8, BGR格式
+with open('000000_123456.789.raw', 'rb') as f:
+    img = np.frombuffer(f.read(), dtype=np.uint8).reshape(700, 400, 3)
+```
+
+### 使用SDK离线处理
+
 ```python
 from xensesdk import Sensor
-import cv2
+import numpy as np
 from pathlib import Path
 
 # 加载运行时配置
-sensor_solver = Sensor.createSolver("data/xense_1/runtime_OG000276")
+sensor_solver = Sensor.createSolver("data/20260121_143025/OG000276/runtime_OG000276")
 
-# 处理保存的图像
-for png_file in sorted(Path("data/xense_1").glob("*.png")):
-    img = cv2.imread(str(png_file))
+# 处理保存的原始数据
+for raw_file in sorted(Path("data/20260121_143025/OG000276").glob("*.raw")):
+    # 还原图像
+    with open(raw_file, 'rb') as f:
+        img = np.frombuffer(f.read(), dtype=np.uint8).reshape(700, 400, 3)
     
     # 获取各种数据类型
     depth, force, diff = sensor_solver.selectSensorInfo(

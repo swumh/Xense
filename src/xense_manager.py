@@ -71,7 +71,8 @@ class XenseManager:
     def add_timestamp_publisher(self, sensor_name: str, publish_rate: float = 30.0,
                                 topic_name: str = None, frame_id: str = None,
                                 namespace: str = "", save_rectify: bool = True,
-                                save_dir: str = None) -> XenseTimestampPublisher:
+                                save_dir: str = None, publish_rectify: bool = False,
+                                queue_buffer_seconds: float = 60.0) -> XenseTimestampPublisher:
         """
         为指定传感器添加时间戳发布器
         
@@ -83,6 +84,8 @@ class XenseManager:
             namespace: ROS命名空间前缀
             save_rectify: 是否保存Rectify图像，默认True
             save_dir: 保存图像的目录
+            publish_rectify: 是否发布Rectify图像话题
+            queue_buffer_seconds: 写盘队列缓冲时间（秒），默认60秒
         
         返回:
             XenseTimestampPublisher: 发布器实例
@@ -108,7 +111,9 @@ class XenseManager:
                 frame_id=frame_id,
                 namespace=namespace,
                 save_rectify=save_rectify,
-                save_dir=save_dir
+                save_dir=save_dir,
+                publish_rectify=publish_rectify,
+                queue_buffer_seconds=queue_buffer_seconds
             )
             self.publishers[publisher_name] = publisher
             rospy.loginfo(f"[XenseManager] 已添加时间戳发布器: {publisher_name}")

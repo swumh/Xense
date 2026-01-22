@@ -39,7 +39,7 @@ def scan_sensors() -> dict:
 
 
 def setup_auto_scan(publish_rate: float = 30.0, save_rectify: bool = True, 
-                    save_dir: str = None) -> XenseManager:
+                    save_dir: str = None, publish_rectify: bool = False) -> XenseManager:
     """
     自动扫描并配置所有检测到的传感器（最多4个）
     
@@ -47,6 +47,7 @@ def setup_auto_scan(publish_rate: float = 30.0, save_rectify: bool = True,
         publish_rate: 发布频率（Hz）
         save_rectify: 是否保存Rectify图像
         save_dir: 保存图像的目录
+        publish_rectify: 是否发布Rectify图像话题
     
     返回:
         XenseManager: 配置好的管理器实例
@@ -89,7 +90,8 @@ def setup_auto_scan(publish_rate: float = 30.0, save_rectify: bool = True,
                 topic_name=f"/{sensor_name}/timestamp",
                 frame_id=sensor_name,
                 save_rectify=save_rectify,
-                save_dir=save_dir
+                save_dir=save_dir,
+                publish_rectify=publish_rectify
             )
             
             rospy.loginfo(f"[Main] 已配置传感器: {sensor_name} ({sensor_id})")
@@ -110,6 +112,8 @@ def main():
                        help='发布频率（Hz），默认60Hz')
     parser.add_argument('--no-save-rectify', action='store_true',
                        help='不保存Rectify图像')
+    parser.add_argument('--publish-rectify', action='store_true',
+                       help='发布Rectify话题 (包含图像和时间戳)，且不保存图像')
     parser.add_argument('--save-dir', type=str, default=None,
                        help='保存图像的目录，默认为 data/')
     parser.add_argument('--scan-only', action='store_true',
@@ -134,9 +138,16 @@ def main():
     # 初始化ROS节点
     rospy.init_node('xense_timestamp_publisher', anonymous=True)
     
-    # 从ROS参数服务器获取参数
     publish_rate = rospy.get_param('~rate', args.rate)
-    save_rectify = not rospy.get_param('~no_save_rectify', args.no_save_rectify)
+    publish_rectify = rospy.get_param('~publish_rectify', args.publish_rectify)
+    
+    # 如果开启发布Rectify，则强制不保存图像
+    if publish_rectify:
+        save_rectify = False
+        rospy.loginfo("[Main] 开启Rectify话题发布，自动禁用图像保存")
+    else:
+        save_rectify = not rospy.get_param('~no_save_rectify', args.no_save_rectify)
+        
     save_dir_base = rospy.get_param('~save_dir', args.save_dir)
     
     # 创建以时间戳命名的session目录
@@ -153,7 +164,8 @@ def main():
         manager = setup_auto_scan(
             publish_rate=publish_rate,
             save_rectify=save_rectify,
-            save_dir=save_dir
+            save_dir=save_dir,
+            publish_rectify=publish_rectify
         )
         
         # 检查是否有可用的传感器

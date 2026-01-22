@@ -9,6 +9,7 @@ import rospy
 import cv2
 import numpy as np
 from std_msgs.msg import Header, Float64
+from sensor_msgs.msg import Image
 from pathlib import Path
 import sys
 import threading
@@ -33,7 +34,8 @@ class XenseTimestampPublisher(BaseDataPublisher):
     def __init__(self, sensor: XenseSensor, publish_rate: float = 30.0,
                  topic_name: str = None, frame_id: str = None, 
                  namespace: str = "", save_rectify: bool = True,
-                 save_dir: str = None):
+                 save_dir: str = None, publish_rectify: bool = False,
+                 queue_buffer_seconds: float = 60.0):
         """
         初始化时间戳发布器
         
@@ -45,9 +47,33 @@ class XenseTimestampPublisher(BaseDataPublisher):
             namespace: ROS命名空间前缀，用于区分多个传感器
             save_rectify: 是否保存Rectify图像，默认True
             save_dir: 保存图像的目录，如果为None则使用默认目录
+            publish_rectify: 是否发布Rectify图像，默认False
+            queue_buffer_seconds: 写盘队列缓冲时间（秒），默认60秒
         """
         self.save_rectify = save_rectify
+        self.publish_rectify = publish_rectify
         self.namespace = namespace
+
+        # 如果开启发布Rectify，初始化相关资源
+        if self.publish_rectify:
+            # 强制关闭保存
+            self.save_rectify = False 
+            
+            # 创建Rectify图像发布者
+            if namespace:
+                rectify_topic = f"/{namespace}/rectify"
+            else:
+                rectify_topic = f"/{sensor.name}/rectify"
+            self.rectify_pub = rospy.Publisher(rectify_topic, Image, queue_size=10)
+            rospy.loginfo(f"[{sensor.name}] Rectify发布话题: {rectify_topic}")
+            
+            # 预分配Image消息对象，避免每帧创建新对象
+            self._img_msg = Image()
+            self._img_msg.encoding = "bgr8"
+            self._img_msg.is_bigendian = 0
+            # height, width, step 在第一帧时设置（因为需要知道实际尺寸）
+            self._img_msg_initialized = False
+
         
         # 设置保存目录：使用sensor_id作为子目录名
         if save_dir is None:
@@ -64,10 +90,14 @@ class XenseTimestampPublisher(BaseDataPublisher):
         self.timestamps = []
         
         # 写盘队列和线程
-        self.write_queue = queue.Queue()
+        # 队列大小为 publish_rate * queue_buffer_seconds，用于缓冲写盘任务
+        queue_maxsize = int(publish_rate * queue_buffer_seconds)
+        self.write_queue = queue.Queue(maxsize=queue_maxsize)
         self.write_thread_running = True
         self.write_thread = threading.Thread(target=self._write_worker, daemon=True)
         self.write_thread.start()
+        
+        rospy.loginfo(f"[{sensor.name}] 写盘队列大小: {queue_maxsize} (rate={publish_rate}Hz × {queue_buffer_seconds}s)")
         
         # 设置默认话题名称
         if topic_name is None:
@@ -87,20 +117,21 @@ class XenseTimestampPublisher(BaseDataPublisher):
         return f"/{self.sensor.name}/timestamp"
     
     def _write_worker(self):
-        """写盘工作线程"""
-        while self.write_thread_running or not self.write_queue.empty():
+        """写盘工作线程：直接保存numpy原始数据，避免图像编码开销"""
+        while True:
+            task = self.write_queue.get()  # 阻塞等待，避免轮询开销
             try:
-                # 从队列获取任务，超时1秒
-                task = self.write_queue.get(timeout=1.0)
                 if task is None:  # 退出信号
-                    break
+                    return
                 filename, img = task
-                cv2.imwrite(str(filename), img)
-                self.write_queue.task_done()
-            except queue.Empty:
-                continue
+                # 直接保存numpy数组的原始字节，比np.save更快（无pickle开销）
+                # 离线还原：np.frombuffer(data, dtype=np.uint8).reshape(height, width, 3)
+                with open(str(filename), 'wb') as f:
+                    f.write(img.tobytes())
             except Exception as e:
                 rospy.logwarn(f"[{self.sensor.name}] 写盘失败: {e}")
+            finally:
+                self.write_queue.task_done()
     
     def _create_publisher(self):
         """创建ROS发布者"""
@@ -141,11 +172,6 @@ class XenseTimestampPublisher(BaseDataPublisher):
         # 保存时间戳
         self.timestamps.append(timestamp)
         
-        # 保存Rectify图像（异步写盘，SDK每次返回新帧，无需拷贝）
-        if self.save_rectify and rectify_img is not None:
-            filename = self.save_dir / f"{self.frame_count:06d}_{timestamp}.png"
-            self.write_queue.put((filename, rectify_img))
-        
         # 创建Header消息
         msg = Header()
         msg.stamp = rospy.Time.from_sec(timestamp)
@@ -153,6 +179,74 @@ class XenseTimestampPublisher(BaseDataPublisher):
         msg.seq = self.frame_count
         
         return msg
+
+    def publish_once(self):
+        """
+        发布一次数据（重写基类方法以支持同时发布Rectify图像）
+        
+        返回:
+            bool: 是否成功发布
+        """
+        try:
+            # 读取数据 (timestamp, rectify_img)
+            data = self._read_data()
+            if data is None:
+                return False
+            
+            # 创建时间戳Header消息
+            msg = self._create_message(data)
+            if msg is None:
+                return False
+            
+            # 发布时间戳Header（优先发布，保证低延迟）
+            self.publisher.publish(msg)
+            
+            # 保存Rectify图像（异步写盘，在时间戳发布后执行）
+            # 数据结构固定：shape=(700, 400, 3), dtype=uint8, BGR格式
+            # 离线还原：np.frombuffer(data, dtype=np.uint8).reshape(700, 400, 3)
+            if self.save_rectify and data[1] is not None:
+                filename = self.save_dir / f"{self.frame_count:06d}_{data[0]}.raw"
+                try:
+                    self.write_queue.put_nowait((filename, data[1]))
+                except queue.Full:
+                    rospy.logwarn_throttle(5.0, f"[{self.sensor.name}] 写盘队列已满，丢弃本帧图像")
+            
+            # 如果需要发布Rectify图像
+            if self.publish_rectify and data[1] is not None:
+                rectify_data = data[1]
+                
+                # 首次发布时初始化固定字段
+                if not self._img_msg_initialized:
+                    self._img_msg.height = rectify_data.shape[0]
+                    self._img_msg.width = rectify_data.shape[1]
+                    self._img_msg.step = rectify_data.strides[0]
+                    self._img_msg_initialized = True
+                
+                # 更新变化的字段
+                self._img_msg.header.stamp = msg.stamp
+                self._img_msg.header.frame_id = msg.frame_id
+                self._img_msg.header.seq = msg.seq
+                
+                # 直接使用numpy数组的bytes，如果是C-contiguous可避免拷贝
+                if rectify_data.flags['C_CONTIGUOUS']:
+                    self._img_msg.data = rectify_data.data.tobytes()
+                else:
+                    self._img_msg.data = np.ascontiguousarray(rectify_data).data.tobytes()
+                
+                self.rectify_pub.publish(self._img_msg)
+
+            self.frame_count += 1
+            
+            # 每100帧打印一次（调试用）
+            if self.frame_count % 100 == 0:
+                rospy.loginfo(f"[{self.sensor.name}] 已发布 {self.frame_count} 帧")
+            
+            return True
+
+            
+        except Exception as e:
+            rospy.logerr(f"[{self.sensor.name}] 发布数据时出错: {e}")
+            return False
     
     def export_timestamps(self, filename: str = None):
         """
@@ -199,9 +293,19 @@ class XenseTimestampPublisher(BaseDataPublisher):
         """关闭发布器，导出数据"""
         rospy.loginfo(f"[{self.sensor.name}] 正在关闭发布器...")
         
-        # 停止写盘线程
+        # 停止写盘线程：先等待队列清空，再发送退出信号，避免丢失已入队任务
         self.write_thread_running = False
-        self.write_queue.put(None)  # 发送退出信号
+        try:
+            self.write_queue.join()
+        except Exception as e:
+            rospy.logwarn(f"[{self.sensor.name}] 等待写盘队列清空失败: {e}")
+        
+        try:
+            self.write_queue.put_nowait(None)  # 发送退出信号
+        except queue.Full:
+            # 极端情况下队列满：阻塞放入退出信号，确保线程能退出
+            self.write_queue.put(None)
+        
         self.write_thread.join(timeout=5.0)  # 等待写盘线程完成
         
         # 导出时间戳
