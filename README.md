@@ -118,11 +118,11 @@
 │   ┌──────────────────────────────────────────────────────────────────┐      │
 │   │                  XenseTimestampPublisher                          │      │
 │   │  ┌────────────────────────┐    ┌────────────────────────────────┐│      │
-│   │  │ _create_message()      │    │ 异步保存图像                     ││      │
+│   │  │ _create_message()      │    │ 异步保存图像(raw)                ││      │
 │   │  │  └──► Header消息        │    │  └──► write_queue.put()        ││      │
 │   │  │       ├─ stamp         │    │       ↓ (写盘线程)              ││      │
 │   │  │       ├─ frame_id      │    │  └──► cv2.imwrite()            ││      │
-│   │  │       └─ seq           │    │       data/{name}/xxx_ts.png   ││      │
+│   │  │       └─ seq           │    │       data/{name}/xxx_ts.png/raw││    │
 │   │  └───────────┬────────────┘    └────────────────────────────────┘│      │
 │   │              │                                                   │      │
 │   │              │ timestamps列表 ──► shutdown时保存为.npy            │      │
@@ -221,6 +221,8 @@ XENSE_ROS/
 
 ## 快速开始
 
+前提 ：严格按照 [xense sdk](SDK_README.md) 的安装文档进行安装
+
 ### 1. 安装依赖
 
 ```bash
@@ -248,7 +250,7 @@ roscore
 # 终端2：启动传感器
 conda activate xenseenv
 source /opt/ros/noetic/setup.bash
-cd /home/sumaohuan/Desktop/XENSE_ROS
+cd /path/to/XENSE_ROS
 
 # 自动扫描并启动所有传感器
 python3 src/main.py
@@ -256,13 +258,32 @@ python3 src/main.py
 
 ## 命令行参数
 
-| 参数 | 说明 |
-|------|------|
-| `--scan-only` | 仅扫描传感器，不启动发布 |
-| `--rate` | 发布频率(Hz)，默认60 |
-| `--no-save-rectify` | 不保存Rectify图像 |
-| `--publish-rectify` | 发布Rectify话题（包含图像和时间戳），自动禁用图像保存 |
-| `--save-dir` | 保存目录，默认为 `data/` |
+| 参数 | 说明 | 用途 |
+|------|------|------|
+| `--scan-only` | 仅扫描传感器，不启动发布 | 扫描已连接的传感器 |
+| `--rate` | 发布频率(Hz)，默认60 | 控制频率 |
+| `--no-save-rectify` | 不保存Rectify图像 | 只发布时间戳 |
+| `--publish-rectify` | 发布Rectify话题（包含图像和时间戳），自动禁用图像保存 | 发布rectify图像，不保存在本地，用于可视化 |
+| `--save-dir` | 保存目录，默认为 `data/` | 设置目录 |
+
+## 用法
+
+性能最佳实践：只发布时间戳，用于多模态数采对齐；不发布图像，但图像保存在本地，用于离线处理
+
+```
+# 默认行为：只发布时间戳，不发布图像话题，且raw保存到本地
+python3 src/main.py
+```
+
+```
+# 默认行为：发布图像话题，不保存到本地，用于rviz等可视化
+python3 src/main.py ----publish-rectify
+```
+
+```
+# 默认行为：只发布时间戳，不发布图像不本地保存，用于调试时间戳对齐
+python3 src/main.py ----no-save-rectify
+```
 
 ## 输出
 
@@ -335,12 +356,6 @@ for raw_file in sorted(Path("data/20260121_143025/OG000276").glob("*.raw")):
     )
 
 sensor_solver.release()
-```
-
-## 依赖
-
-```bash
-pip install xensesdk opencv-python numpy
 ```
 
 ## SDK参考
