@@ -43,7 +43,7 @@ class XenseTimestampPublisher(BaseDataPublisher):
             sensor: XenseSensor实例
             publish_rate: 发布频率（Hz），默认30Hz
             topic_name: ROS话题名称，如果为None则使用默认名称
-            frame_id: 坐标系ID，如果为None则使用sensor.name
+            frame_id: 坐标系ID，如果为None则使用sensor.sensor_id
             namespace: ROS命名空间前缀，用于区分多个传感器
             save_rectify: 是否保存Rectify图像，默认True
             save_dir: 保存图像的目录，如果为None则使用默认目录
@@ -63,7 +63,8 @@ class XenseTimestampPublisher(BaseDataPublisher):
             if namespace:
                 rectify_topic = f"/{namespace}/rectify"
             else:
-                rectify_topic = f"/{sensor.name}/rectify"
+                # 使用序列号作为话题名称
+                rectify_topic = f"/{sensor.sensor_id}/rectify"
             self.rectify_pub = rospy.Publisher(rectify_topic, Image, queue_size=10)
             rospy.loginfo(f"[{sensor.name}] Rectify发布话题: {rectify_topic}")
             
@@ -84,7 +85,7 @@ class XenseTimestampPublisher(BaseDataPublisher):
         # 如果需要保存图像，创建保存目录
         if self.save_rectify:
             self.save_dir.mkdir(parents=True, exist_ok=True)
-            rospy.loginfo(f"[{sensor.name}] 图像保存目录: {self.save_dir}")
+            rospy.loginfo(f"[{sensor.sensor_id}] 图像保存目录: {self.save_dir}")
         
         # 保存时间戳列表（用于导出）
         self.timestamps = []
@@ -97,24 +98,24 @@ class XenseTimestampPublisher(BaseDataPublisher):
         self.write_thread = threading.Thread(target=self._write_worker, daemon=True)
         self.write_thread.start()
         
-        rospy.loginfo(f"[{sensor.name}] 写盘队列大小: {queue_maxsize} (rate={publish_rate}Hz × {queue_buffer_seconds}s)")
+        rospy.loginfo(f"[{sensor.sensor_id}] 写盘队列大小: {queue_maxsize} (rate={publish_rate}Hz × {queue_buffer_seconds}s)")
         
         # 设置默认话题名称
         if topic_name is None:
             if namespace:
                 topic_name = f"/{namespace}/timestamp"
             else:
-                topic_name = f"/{sensor.name}/timestamp"
+                topic_name = f"/{sensor.sensor_id}/timestamp"
         
         # 设置默认frame_id
         if frame_id is None:
-            frame_id = sensor.name
+            frame_id = sensor.sensor_id
         
         super().__init__(sensor, publish_rate, topic_name, frame_id)
     
     def _get_default_topic_name(self) -> str:
         """获取默认话题名称"""
-        return f"/{self.sensor.name}/timestamp"
+        return f"/{self.sensor.sensor_id}/timestamp"
     
     def _write_worker(self):
         """写盘工作线程：直接保存numpy原始数据，避免图像编码开销"""
@@ -239,7 +240,7 @@ class XenseTimestampPublisher(BaseDataPublisher):
             
             # 每100帧打印一次（调试用）
             if self.frame_count % 100 == 0:
-                rospy.loginfo(f"[{self.sensor.name}] 已发布 {self.frame_count} 帧")
+                rospy.loginfo(f"[{self.sensor.sensor_id}] 已发布 {self.frame_count} 帧")
             
             return True
 

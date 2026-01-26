@@ -80,7 +80,7 @@ class XenseManager:
             sensor_name: 传感器名称
             publish_rate: 发布频率（Hz），默认30Hz
             topic_name: ROS话题名称，如果为None则使用默认名称
-            frame_id: 坐标系ID，如果为None则使用sensor.name
+            frame_id: 坐标系ID，如果为None则使用sensor.sensor_id
             namespace: ROS命名空间前缀
             save_rectify: 是否保存Rectify图像，默认True
             save_dir: 保存图像的目录

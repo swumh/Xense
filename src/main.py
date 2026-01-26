@@ -84,11 +84,14 @@ def setup_auto_scan(publish_rate: float = 30.0, save_rectify: bool = True,
             sensor = manager.add_sensor(sensor_id=sensor_id, name=sensor_name)
             
             # 添加时间戳发布器
+            # 使用序列号作为话题名称
+            topic_name = f"/{sensor_id}/timestamp"
+            
             manager.add_timestamp_publisher(
                 sensor_name=sensor_name,
                 publish_rate=publish_rate,
-                topic_name=f"/{sensor_name}/timestamp",
-                frame_id=sensor_name,
+                topic_name=topic_name,
+                frame_id=sensor_id,
                 save_rectify=save_rectify,
                 save_dir=save_dir,
                 publish_rectify=publish_rectify
@@ -133,6 +136,9 @@ def main():
         else:
             print("[Scan] 未检测到任何传感器")
             print("[Scan] 请检查USB连接，或运行: lsusb | grep 3938")
+        # 保存为 json 文件
+        from scan_utils import save_scan_result_to_json
+        save_scan_result_to_json(sensors)
         return
     
     # 初始化ROS节点
@@ -180,6 +186,9 @@ def main():
         rospy.loginfo(f"  - 发布器数量: {len(stats['publishers'])}")
         for name, info in stats['sensors'].items():
             rospy.loginfo(f"  - {name}: {info['sensor_id']}")
+            
+            # map (xense_id -> sensor_serial)
+            # map.append((name, info['sensor_id']))
                 
         # 启动发布器
         if len(manager.publishers) == 1:

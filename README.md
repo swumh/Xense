@@ -237,7 +237,7 @@ sudo ./ubuntu_install.sh
 ```bash
 conda activate xenseenv
 
-# 仅扫描，查看连接的传感器
+# 仅扫描，查看连接的传感器，并完成配对，生成配对成功后的json文件，用于后续的采集
 python3 src/main.py --scan-only
 ```
 
@@ -271,7 +271,7 @@ python3 src/main.py
 性能最佳实践：只发布时间戳，用于多模态数采对齐；不发布图像，但图像保存在本地，用于离线处理
 
 ```
-# 默认行为：只发布时间戳，不发布图像话题，且raw保存到本地
+# 默认行为：只发布时间戳，不发布图像话题，且raw保存到本地，用于数采
 python3 src/main.py
 ```
 
