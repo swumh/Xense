@@ -1,16 +1,34 @@
-{
-  "xv_serial": "",
-  "count": 2,
-  "sensors": [
-    {
-      "serial": "OG000724",
-      "camera_id": 2,
-      "side": "left"
-    },
-    {
-      "serial": "OG000276",
-      "camera_id": 4,
-      "side": "right"
-    }
-  ]
-}
+[
+  {
+    "xv_serial": "",
+    "count": 2,
+    "sensors": [
+      {
+        "serial": "OG000723",
+        "camera_id": 2,
+        "side": "left"
+      },
+      {
+        "serial": "OG000717",
+        "camera_id": 0,
+        "side": "right"
+      }
+    ]
+  },
+  {
+    "xv_serial": "",
+    "count": 2,
+    "sensors": [
+      {
+        "serial": "OG000724",
+        "camera_id": 4,
+        "side": "left"
+      },
+      {
+        "serial": "OG000276",
+        "camera_id": 6,
+        "side": "right"
+      }
+    ]
+  }
+]

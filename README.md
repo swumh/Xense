@@ -348,10 +348,15 @@ for raw_file in sorted(Path("data/20260121_143025/OG000276").glob("*.raw")):
         img = np.frombuffer(f.read(), dtype=np.uint8).reshape(700, 400, 3)
     
     # 获取各种数据类型
-    depth, force, diff = sensor_solver.selectSensorInfo(
+    # Rectify、Difference、Depth、Force、ForceResultant、ForceNorm
+    diff, depth, force, forceResultant, forceNorm= sensor_solver.selectSensorInfo(
+        
+        Sensor.PutputType.Difference,
         Sensor.OutputType.Depth,
         Sensor.OutputType.Force,
-        Sensor.OutputType.Difference,
+        Sensor.OutputType.forceResultant,
+        Sensor.OutputType.forceNorm,
+        
         rectify_image=img
     )
 

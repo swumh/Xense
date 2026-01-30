@@ -37,3 +37,5 @@ install/
 # Logs and databases and test
 test/
 data/
+
+*.mp4

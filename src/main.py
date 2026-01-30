@@ -111,7 +111,7 @@ def main():
     parser = argparse.ArgumentParser(description='Xense时间戳ROS发布节点（自动扫描模式）')
     
     # 参数
-    parser.add_argument('--rate', type=float, default=60.0,
+    parser.add_argument('--rate', type=float, default=30.0,
                        help='发布频率（Hz），默认60Hz')
     parser.add_argument('--no-save-rectify', action='store_true',
                        help='不保存Rectify图像')
@@ -136,9 +136,35 @@ def main():
         else:
             print("[Scan] 未检测到任何传感器")
             print("[Scan] 请检查USB连接，或运行: lsusb | grep 3938")
-        # 保存为 json 文件
-        from scan_utils import save_scan_result_to_json
-        save_scan_result_to_json(sensors)
+            return
+        
+        # 根据传感器数量选择不同的处理逻辑
+        if len(sensors) == 2:
+            # 2个传感器：使用原有逻辑，保存为单个 JSON 文件
+            from scan_utils import save_scan_result_to_json
+            save_scan_result_to_json(sensors)
+        elif len(sensors) == 4:
+            # 4个传感器：分两组检测，生成两个 JSON 文件
+            print("\n" + "=" * 50)
+            print("[Scan] 检测到4个传感器，将进行分组配置")
+            print("[Scan] 需要将4个传感器分成两组，每组包含左右两个传感器")
+            print("=" * 50)
+            
+            from scan_utils import detect_four_sensors_grouped, save_grouped_scan_result
+            try:
+                groups = detect_four_sensors_grouped(sensors)
+                save_grouped_scan_result(groups)
+            except Exception as e:
+                print(f"[Scan] 分组检测失败: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            # 其他数量：仅保存基本信息，不进行左右检测
+            print(f"[Scan] 警告: 当前仅支持2个或4个传感器的完整配置")
+            print(f"[Scan] 将保存基本扫描结果（不含左右位置信息）")
+            from scan_utils import save_scan_result_to_json
+            save_scan_result_to_json(sensors)
+        
         return
     
     # 初始化ROS节点
