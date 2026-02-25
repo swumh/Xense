@@ -1,3 +1,13 @@
+<!-- 
+本文档来自于 **Xense Robotics** 官方
+
+| 资源         | 链接 |
+|--------------|------|
+| 官网         | https://www.xenserobotics.com/product/367/detail/9 |
+| 开发手册     | https://xensesdk-cn.readthedocs.io/zh-cn/latest/index.html |
+| GitHub       | https://github.com/XenseRobotics/xensesdk | 
+-->
+
 # Xense SDK 文档
 
 **如有使用问题，请添加微信 qjrobot9966 来交流**
