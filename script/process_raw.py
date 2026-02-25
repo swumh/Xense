@@ -3,6 +3,8 @@
 """
 Xense 离线数据处理脚本
 功能：批量处理 data/2026* 路径下所有 session 的原始数据，使用 SDK 离线还原并导出多种数据类型
+
+python process_raw.py --session-dir data/2026*
 """
 
 import numpy as np

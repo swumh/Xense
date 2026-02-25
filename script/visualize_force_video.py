@@ -4,6 +4,8 @@
 可视化 Xense 离线处理结果：Rectify、Difference、Depth（图片），Force、ForceResultant、ForceNorm（npz），并合成视频。
 输入：单个 sensor 目录（如 data/20260128_170658/OG000276）
 输出：output.mp4
+
+python script/visualize_force_video.py --sensor-dir data/2026*/OG000*
 """
 import cv2
 import numpy as np
