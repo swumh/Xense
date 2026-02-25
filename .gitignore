@@ -39,3 +39,5 @@ test/
 data/
 
 *.mp4
+
+*.whl
