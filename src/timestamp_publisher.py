@@ -65,7 +65,8 @@ class XenseTimestampPublisher(BaseDataPublisher):
             else:
                 # 使用序列号作为话题名称
                 rectify_topic = f"/{sensor.sensor_id}/rectify"
-            self.rectify_pub = rospy.Publisher(rectify_topic, Image, queue_size=10)
+            # queue_size=1：优先传递最新帧，避免订阅侧堆积导致显示延迟
+            self.rectify_pub = rospy.Publisher(rectify_topic, Image, queue_size=1, tcp_nodelay=True)
             rospy.loginfo(f"[{sensor.name}] Rectify发布话题: {rectify_topic}")
             
             # 预分配Image消息对象，避免每帧创建新对象
@@ -137,7 +138,7 @@ class XenseTimestampPublisher(BaseDataPublisher):
     def _create_publisher(self):
         """创建ROS发布者"""
         # 使用Header消息，包含时间戳和frame_id
-        pub = rospy.Publisher(self.topic_name, Header, queue_size=10)
+        pub = rospy.Publisher(self.topic_name, Header, queue_size=1, tcp_nodelay=True)
         rospy.loginfo(f"[{self.sensor.name}] 发布话题: {self.topic_name} (Header)")
         return pub
     
