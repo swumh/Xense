@@ -56,6 +56,8 @@ class XenseSensor:
             self.sensor = Sensor.create(self.sensor_id)
             self.is_connected = True
             rospy.loginfo(f"[{self.name}] 传感器连接成功！")
+            # 连接成功后立即进行一次校准
+            self.calibrate()
         except Exception as e:
             rospy.logerr(f"[{self.name}] 错误：无法连接传感器 - {e}")
             self.is_connected = False
